@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KMK2473 - 3D Space Model</title>
+    
+    <!-- Load Three.js and dat.GUI from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #000; }
+        
+        /* Biodata Panel Styling */
+        #biodata-panel {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0, 0, 0, 0.85); color: #fff;
+            padding: 20px; border-radius: 10px;
+            border: 2px solid #00d2ff;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+            z-index: 10; max-width: 300px;
+        }
+        .profile-pic {
+            width: 100px; height: 100px; border-radius: 50%;
+            object-fit: cover; border: 3px solid #fff;
+            margin-bottom: 15px; display: block;
+        }
+        .label { font-weight: bold; color: #00d2ff; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
+        .value { font-size: 1.1em; margin-bottom: 8px; }
+
+        /* User Guide Manual Styling */
+        #user-guide {
+            position: absolute; bottom: 20px; right: 20px;
+            background: rgba(255, 255, 255, 0.9); color: #333;
+            padding: 20px; border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            z-index: 10; max-width: 280px;
+        }
+        #user-guide h3 { margin-top: 0; color: #d32f2f; }
+        #user-guide ul { padding-left: 20px; }
+        #user-guide li { margin-bottom: 8px; font-size: 0.95em; }
+
+        /* Loading Overlay */
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; color: #fff; display: flex; justify-content: center; align-items: center;
+            z-index: 100; font-size: 1.5em; transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen -->
+    <div id="loading">Loading 3D Environment...</div>
+
+    <!-- Biodata Section -->
+    <div id="biodata-panel">
+        <!-- REPLACE 'profile.jpg' WITH YOUR ACTUAL IMAGE FILE NAME -->
+        <img src="profile.jpg" alt="Profile Picture" class="profile-pic" onerror="this.src='https://via.placeholder.com/100?text=User';">
+        
+        <div><span class="label">Name:</span> <span class="value">MOHAMAD FARIS IRSYAD BIN SOBLE</span></div>
+        <div><span class="label">Matric No:</span> <span class="value">105004</span></div>
+        <div><span class="label">Group:</span> <span class="value">GROUP 1</span></div>
+        <div><span class="label">Course:</span> <span class="value">Bachelor of Cognitive Science</span></div>
+        <div><span class="label">Subject:</span> <span class="value">KMK2473 Computer Graphics</span></div>
+        <div><span class="label">Lecturer:</span> <span class="value">PROF MADYA DR ABDULRAZAK YAHYA SALEH AL-HABABI</span></div>
+    </div>
+
+    <!-- User Guide Manual -->
+    <div id="user-guide">
+        <h3>User Guide Manual</h3>
+        <p>This 3D space model demonstrates concepts of <strong>Rotation, Scaling, Translation, Lighting, and Collision Detection</strong>.</p>
+        <ul>
+            <li><strong>Mouse Click:</strong> Toggle Animation On/Off.</li>
+            <li><strong>Arrow Keys:</strong> Change Camera Direction (Left/Right/Up/Down).</li>
+            <li><strong>GUI Panel (Top Right):</strong> Adjust Speed, Light Intensity, Colors, and Zoom.</li>
+        </ul>
+    </div>
+
+    <!-- Script Logic -->
+    <script>
+        // --- 1. SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050510); // Deep space dark blue
+        scene.fog = new THREE.FogExp2(0x050510, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // Enable shadows
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. LIGHTING & EFFECTS ---
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5); // Soft base light
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.PointLight(0xffffff, 2, 100);
+        sunLight.position.set(5, 5, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        scene.add(sunLight);
+
+        // Add a rim light for dramatic effect
+        const rimLight = new THREE.DirectionalLight(0x00d2ff, 1);
+        rimLight.position.set(-5, 2, -5);
+        scene.add(rimLight);
+
+        // --- 3. CREATE SPACE MODEL (Procedural Planets & Stars) ---
+        const planets = [];
+        const starField = new THREE.Group();
+
+        // Function to create a planet
+        function createPlanet(size, color, distance, speed, name) {
+            // Planet Mesh
+            const geometry = new THREE.SphereGeometry(size, 32, 32);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: color, 
+                roughness: 0.7,
+                metalness: 0.2
+            });
+            const planet = new THREE.Mesh(geometry, material);
+            
+            // Create an empty group to act as the pivot point for orbiting
+            const pivot = new THREE.Object3D();
+            pivot.rotation.y = Math.random() * Math.PI * 2; // Random start angle
+            scene.add(pivot);
+
+            // Translate planet from pivot (Translation)
+            planet.position.x = distance;
+            planet.castShadow = true;
+            planet.receiveShadow = true;
+            
+            pivot.add(planet);
+
+            // Add Orbit Ring (Visual guide)
+            const ringGeo = new THREE.RingGeometry(distance - 0.05, distance + 0.05, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            scene.add(ring);
+
+            // Store data for animation
+            planets.push({ mesh: planet, pivot: pivot, speed: speed, selfSpeed: 0.01 + Math.random() * 0.02 });
+            return { mesh: planet, pivot: pivot };
+        }
+
+        // Create Sun (Center)
+        const sunGeo = new THREE.SphereGeometry(1.5, 32, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+        const sun = new THREE.Mesh(sunGeo, sunMat);
+        scene.add(sun);
+
+        // Create Planets
+        createPlanet(0.6, 0x888888, 3, 0.02, "Mercury"); // Grey
+        createPlanet(0.8, 0xff6600, 5, 0.015, "Venus"); // Orange
+        createPlanet(0.9, 0x0066ff, 7, 0.01, "Earth"); // Blue
+        createPlanet(1.2, 0xff0000, 9, 0.008, "Mars"); // Red
+        createPlanet(2.0, 0xd2b48c, 12, 0.005, "Jupiter"); // Tan
+
+        // Create Starfield
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 2000;
+        const posArray = new Float32Array(starCount * 3);
+        for(let i=0; i<starCount*3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 100;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const starMat = new THREE.PointsMaterial({size: 0.1, color: 0xffffff});
+        const stars = new THREE.Points(starGeo, starMat);
+        scene.add(stars);
+
+        // --- 4. ANIMATION STATE VARIABLES ---
+        let isAnimating = true;
+        let camDirX = 0;
+        let camDirZ = 0;
+        let params = {
+            rotationSpeed: 0.01,
+            orbitSpeed: 1.0,
+            lightIntensity: 2.0,
+            autoRotate: true,
+            showShadows: true,
+            collisionColor: false
+        };
+
+        // --- 5. GUI INTERFACE (Multiple Controls) ---
+        const gui = new dat.GUI();
+        
+        const folderAnimation = gui.addFolder('Animation Control');
+        folderAnimation.add(params, 'rotationSpeed', 0, 0.1).name("Planet Spin Speed");
+        folderAnimation.add(params, 'orbitSpeed', 0.1, 3.0).name("Orbit Speed");
+        folderAnimation.add(params, 'autoRotate').name("Auto Rotate Camera");
+        folderAnimation.open();
+
+        const folderAppearance = gui.addFolder('Appearance & Lighting');
+        folderAppearance.add(params, 'lightIntensity', 0, 5).name("Sun Brightness").onChange(v => sunLight.intensity = v);
+        folderAppearance.add(params, 'showShadows').name("Enable Shadows").onChange(v => renderer.shadowMap.enabled = v);
+        folderAppearance.add(params, 'collisionColor').name("Collision Glow Effect");
+        folderAppearance.open();
+
+        // --- 6. INTERACTION HANDLERS ---
+        
+        // Mouse Click to Toggle Animation
+        document.addEventListener('mousedown', () => {
+            isAnimating = !isAnimating;
+            console.log("Animation State:", isAnimating ? "Active" : "Paused");
+        });
+
+        // Keyboard Controls for Camera Direction
+        document.addEventListener('keydown', (e) => {
+            if(e.key === "ArrowLeft") camDirX = -1;
+            if(e.key === "ArrowRight") camDirX = 1;
+            if(e.key === "ArrowUp") camDirZ = -1;
+            if(e.key === "ArrowDown") camDirZ = 1;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if((e.key === "ArrowLeft" && camDirX === -1) || (e.key === "ArrowRight" && camDirX === 1)) camDirX = 0;
+            if((e.key === "ArrowUp" && camDirZ === -1) || (e.key === "ArrowDown" && camDirZ === 1)) camDirZ = 0;
+        });
+
+        // Window Resize Handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 7. MAIN ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. Rotate Planets (Self Rotation)
+            planets.forEach(p => {
+                p.mesh.rotation.y += p.selfSpeed * params.rotationSpeed;
+                p.pivot.rotation.y += p.speed * params.orbitSpeed;
+                
+                // Scaling Effect (Pulsing)
+                const scale = 1 + Math.sin(Date.now() * 0.002) * 0.05;
+                p.mesh.scale.set(scale, scale, scale);
+            });
+
+            // 2. Camera Movement Logic
+            if (params.autoRotate || isAnimating) {
+                // Orbit around the center
+                const time = Date.now() * 0.0005;
+                camera.position.x = Math.sin(time) * 15;
+                camera.position.z = Math.cos(time) * 15;
+                camera.lookAt(0, 0, 0);
+            } else {
+                // If paused but user pressed keys, move manually
+                if (camDirX !== 0 || camDirZ !== 0) {
+                    camera.position.x += camDirX * 0.1;
+                    camera.position.z += camDirZ * 0.1;
+                    camera.lookAt(0, 0, 0);
+                }
+            }
+
+            // 3. Collision Detection Simulation
+            // Check distance between Earth and Mars (indices 2 and 3)
+            if (params.collisionColor) {
+                const earth = planets[2].mesh;
+                const mars = planets[3].mesh;
+                const dist = earth.position.distanceTo(mars.position);
+                
+                // If they get close (within 2 units), change color to red (collision warning)
+                if (dist < 2.5) {
+                    earth.material.color.setHex(0xff0000);
+                    mars.material.color.setHex(0xff0000);
+                } else {
+                    // Reset colors (approximate original values)
+                    earth.material.color.setHex(0x0066ff);
+                    mars.material.color.setHex(0xff0000);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Hide loading screen when ready
+        window.onload = function() {
+            setTimeout(() => {
+                document.getElementById('loading').style.opacity = 0;
+                setTimeout(() => document.getElementById('loading').remove(), 1000);
+                animate();
+            }, 1000);
+        };
+
+    </script>
+</body>
+</html>
